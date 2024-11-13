@@ -1,0 +1,93 @@
+name: spotec
+services:
+  client:
+    image: ankit8424/spotec-client:1.8.7
+    container_name: spotec-client
+
+    env_file:
+      - .env
+
+    ports:
+      - 80:80
+
+    networks:
+      - spotec-network
+
+    entrypoint: ["nginx", "-g", "daemon off;"]
+
+  server:
+    image: ankit8424/spotec-server:2.3.3
+    container_name: spotec-server
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    ports:
+      - 8000:8000
+
+    volumes:
+      - spotec_server_volume:/spotecserver
+
+    networks:
+      - spotec-network
+
+    depends_on:
+      database:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_started
+
+    command: npm run start
+
+  database:
+    image: mysql:9.0
+    container_name: spotec-db
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_PASSWORD: ${DB_PASS}
+
+    ports:
+      - 3306:3306
+    networks:
+      - spotec-network
+    volumes:
+      - spotec_data_volume:/var/lib/mysql
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+
+  redis:
+    image: redis
+    container_name: spotec-cache
+
+    volumes:
+      - spotec_cache_volume:/data
+    networks:
+      - spotec-network
+    ports:
+      - 6379:6379
+
+volumes:
+  spotec_server_volume:
+    name: "server-volume"
+  spotec_data_volume:
+    name: "data-volume"
+  spotec_cache_volume:
+    name: "cache-volume"
+
+networks:
+  spotec-network:
+    name: "spotec-network"
+    driver: bridge
